@@ -1,7 +1,24 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../client";
+import { NextResponse } from "next/server";
 
-const prisma = new PrismaClient();
+// get all contacts
+export async function GET() {
+  try {
+    // Mengambil semua data kontak dari database
+    const contacts = await prisma.contact.findMany();
+    return NextResponse.json(contacts, { status: 200 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Something went wrong." },
+      { status: 500 },
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
+// Menambahkan kontak baru
 export async function POST(req: Request) {
   try {
     // Parse body JSON
@@ -9,9 +26,9 @@ export async function POST(req: Request) {
 
     // Validasi input
     if (!name || !email || !message) {
-      return new Response(
-        JSON.stringify({ error: "All fields are required" }),
-        { status: 400 }
+      return NextResponse.json(
+        { error: "All fields are required" },
+        { status: 400 },
       );
     }
 
@@ -25,16 +42,16 @@ export async function POST(req: Request) {
     });
 
     // Mengembalikan respons dengan data yang baru saja disimpan
-    return new Response(JSON.stringify(contact), { status: 200 });
+    return NextResponse.json(contact, { status: 200 });
   } catch (error) {
     console.error(error); // Log kesalahan untuk debugging
 
     // Menangani kesalahan umum
-    return new Response(
-      JSON.stringify({
+    return NextResponse.json(
+      {
         error: error instanceof Error ? error.message : "Unknown error",
-      }),
-      { status: 500 }
+      },
+      { status: 500 },
     );
   } finally {
     // Pastikan koneksi Prisma ditutup setelah selesai
@@ -42,53 +59,15 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
-  try {
-    // Mengambil semua data kontak dari database
-    const contacts = await prisma.contact.findMany();
-    
-    return new Response(JSON.stringify(contacts), { status: 200 });
-  } catch (error) {
-    console.error(error);
-    return new Response(
-      JSON.stringify({ error: "Something went wrong." }),
-      { status: 500 }
-    );
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-export async function DELETE(req: Request) {
-  try {
-    const { id } = await req.json(); // Ambil `id` dari body request
-
-    if (!id) {
-      return new Response(JSON.stringify({ error: "ID is required" }), { status: 400 });
-    }
-
-    // Hapus kontak berdasarkan ID
-    await prisma.contact.delete({
-      where: { id },
-    });
-
-    return new Response(JSON.stringify({ message: "Contact deleted successfully" }), { status: 200 });
-  } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: "Something went wrong" }), { status: 500 });
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
+// Update kontak berdasarkan ID
 export async function PUT(req: Request) {
   try {
     const { id, name, email, message } = await req.json();
 
     if (!id || !name || !email || !message) {
-      return new Response(
-        JSON.stringify({ error: "All fields are required" }),
-        { status: 400 }
+      return NextResponse.json(
+        { error: "All fields are required" },
+        { status: 400 },
       );
     }
 
@@ -98,12 +77,43 @@ export async function PUT(req: Request) {
       data: { name, email, message },
     });
 
-    return new Response(JSON.stringify(updatedContact), { status: 200 });
+    return NextResponse.json(updatedContact, { status: 200 });
   } catch (error) {
     console.error(error);
-    return new Response(
-      JSON.stringify({ error: "Something went wrong" }),
-      { status: 500 }
+    return NextResponse.json(
+      { error: "Something went wrong" },
+      { status: 500 },
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Menghapus kontak berdasarkan ID
+export async function DELETE(req: Request) {
+  try {
+    const { id } = await req.json(); // Ambil `id` dari body request
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    // Hapus kontak berdasarkan ID
+    await prisma.contact.delete({
+      where: { id },
+    });
+
+    return NextResponse.json(
+      { message: "Contact deleted successfully" },
+      { status: 200 },
+    );
+  } catch (error) {
+    console.error("Error deleting contact:", error);
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Something went wrong",
+      },
+      { status: 500 },
     );
   } finally {
     await prisma.$disconnect();

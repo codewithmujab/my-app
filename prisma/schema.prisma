@@ -3,7 +3,7 @@
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
+//https://www.prisma.io/docs/getting-started/quickstart-sqlite
 generator client {
   provider = "prisma-client-js"
 }
@@ -28,6 +28,8 @@ model Contact {
   email     String
   message   String
   createdAt DateTime @default(now())
+
+  @@map("contacts") // menetapkan nama tabel
 }
 
 //npx prisma init

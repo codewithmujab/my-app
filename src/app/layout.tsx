@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -91,6 +92,7 @@ export default function RootLayout({
           </aside>
 
           {/* Main Content Area */}
+          <Toaster />
           <main className="flex-1 p-6">{children}</main>
         </div>
 

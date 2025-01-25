@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "react-hot-toast";
 
 interface Contact {
   id: number;
@@ -10,110 +11,74 @@ interface Contact {
 }
 
 export default function ContactPage() {
-
-const [contacts, setContacts] = useState<Contact[]>([]); // Array of Contact
-const [editingContact, setEditingContact] = useState<Contact | null>(null); // Either Contact or null
+  const [contacts, setContacts] = useState<Contact[]>([]); // Array of Contact
+  const [editingContact, setEditingContact] = useState<Contact | null>(null); // Either Contact or null
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); // Optional: To show loading state
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<number | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  
+
   useEffect(() => {
     // Ambil data kontak dari API
     const fetchContacts = async () => {
-      const response = await fetch("/api/contact");
-      if (response.ok) {
-        const data = await response.json();
-        setContacts(data); // Update state dengan data kontak
-      } else {
-        console.error("Failed to fetch contacts");
+      try {
+        const response = await fetch("/api/contact");
+        if (response.ok) {
+          const data = await response.json();
+          setContacts(data);
+        } else {
+          console.error("Failed to fetch contacts");
+        }
+      } catch (error) {
+        console.error("Error fetching contacts:", error);
       }
     };
 
     fetchContacts();
   }, []); // Empty dependency array berarti ini hanya dipanggil sekali saat komponen dimuat
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    setIsSubmitting(true); // Set to true to indicate the form is being submitted
-    
-  
-  const newContact: Omit<Contact, "id"> = { name, email, message }; // Data baru tanpa ID
-  const tempContact: Contact = { ...newContact, id: Date.now() }; // Optimistic ID
-  setContacts((prevContacts) => [tempContact, ...prevContacts]);
+    const newContact: Omit<Contact, "id"> = { name, email, message };
 
-    // Kirim data ke API
-    const response = await fetch("/api/contact", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ name, email, message }),
-    });
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newContact),
+      });
 
-    if (response.ok) {
-      alert("Pesan Anda berhasil terkirim!");
+      if (response.ok) {
+        const savedContact = await response.json();
 
-      // Reset form setelah berhasil
-      setName("");
-      setEmail("");
-      setMessage("");
+        // Tambahkan kontak yang berhasil disimpan ke state
+        setContacts((prevContacts) => [savedContact, ...prevContacts]);
 
-       // Untuk memastikan data dari database benar (opsional)
-      const savedContact = await response.json();
-      setContacts((prevContacts) =>
-        prevContacts.map((contact) =>
-          contact === newContact ? savedContact : contact
-        )
-      );
-    } else {
-      alert("Terjadi kesalahan, coba lagi.");
-      // Jika gagal, rollback optimistic update
-      setContacts((prevContacts) =>
-        prevContacts.filter((contact) => contact !== newContact)
-      );
+        // Reset form
+        setName("");
+        setEmail("");
+        setMessage("");
+
+        toast.success("Pesan Anda berhasil terkirim!"); // Ganti toast dengan toast
+      } else {
+        toast.error("Terjadi kesalahan, coba lagi."); // Ganti toast dengan toast
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Something went wrong."); // Ganti toast dengan toast
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false); // Reset submitting state after request
   };
-
-const handleDelete = async (id: number) => {
-  const confirmDelete = confirm("Are you sure you want to delete this contact?");
-  if (!confirmDelete) return;
-
-  setIsDeleting(true);
-
-  try {
-    const response = await fetch("/api/contact", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ id }), // Kirim ID kontak yang akan dihapus
-    });
-
-    if (response.ok) {
-      // Hapus kontak dari state lokal setelah berhasil
-      setContacts((prevContacts) =>
-        prevContacts.filter((contact) => contact.id !== id)
-      );
-      alert("Contact deleted successfully.");
-    } else {
-      const error = await response.json();
-      alert(`Failed to delete contact: ${error.message || "Unknown error"}`);
-    }
-  } catch (error) {
-    console.error("Error deleting contact:", error);
-    alert("Something went wrong. Please try again.");
-  } finally {
-    setIsDeleting(false);
-  }
-};
-
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,31 +102,97 @@ const handleDelete = async (id: number) => {
         // Update kontak di state
         setContacts((prevContacts) =>
           prevContacts.map((contact) =>
-            contact.id === updatedContact.id ? updatedContact : contact
-          )
+            contact.id === updatedContact.id ? updatedContact : contact,
+          ),
         );
 
-        alert("Contact updated successfully!");
+        toast.success("Contact updated successfully!");
         setEditingContact(null); // Tutup modal setelah berhasil
       } else {
-        alert("Failed to update contact.");
+        toast.error("Failed to update contact.");
       }
     } catch (error) {
       console.error("Error updating contact:", error);
-      alert("Something went wrong. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenModal = (id: number) => {
+    setContactToDelete(id);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setContactToDelete(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!id) return;
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }), // Kirim ID kontak yang akan dihapus
+      });
+
+      if (response.ok) {
+        // Pastikan respons memiliki JSON
+        const data = response.headers
+          .get("Content-Type")
+          ?.includes("application/json")
+          ? await response.json()
+          : null;
+
+        // Hapus kontak dari state lokal
+        setContacts((prevContacts) =>
+          prevContacts.filter((contact) => contact.id !== id),
+        );
+
+        toast.success(data?.message || "Contact deleted successfully.");
+      } else {
+        const error = response.headers
+          .get("Content-Type")
+          ?.includes("application/json")
+          ? await response.json()
+          : { message: "Unknown error" };
+
+        toast.error(
+          `Failed to delete contact: ${error.message || "Unknown error"}`,
+        );
+      }
+    } catch (error: unknown) {
+      // Pengecekan error dengan lebih aman
+      if (error instanceof Error) {
+        console.error("Error deleting contact:", error);
+        toast.error(error.message || "Something went wrong. Please try again.");
+      } else {
+        console.error("Unknown error:", error);
+        toast.error("Something went wrong. Please try again.");
+      }
+    } finally {
+      setIsDeleting(false);
+       handleCloseModal(); // Tambahkan ini untuk memastikan modal ditutup setelah selesai
     }
   };
 
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-2xl font-semibold mb-4">Contact Us</h1>
-      
+
       {/* Formulir pengiriman pesan */}
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="name" className="block text-sm font-medium">Name</label>
+          <label htmlFor="name" className="block text-sm font-medium">
+            Name
+          </label>
           <input
             type="text"
             id="name"
@@ -171,7 +202,9 @@ const handleDelete = async (id: number) => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="email" className="block text-sm font-medium">Email</label>
+          <label htmlFor="email" className="block text-sm font-medium">
+            Email
+          </label>
           <input
             type="email"
             id="email"
@@ -181,7 +214,9 @@ const handleDelete = async (id: number) => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="message" className="block text-sm font-medium">Message</label>
+          <label htmlFor="message" className="block text-sm font-medium">
+            Message
+          </label>
           <textarea
             id="message"
             value={message}
@@ -204,7 +239,10 @@ const handleDelete = async (id: number) => {
         <div className="space-y-4">
           {contacts.length > 0 ? (
             contacts.map((contact) => (
-              <div key={contact.id} className="p-4 border rounded flex justify-between items-center">
+              <div
+                key={contact.id}
+                className="p-4 border rounded flex justify-between items-center"
+              >
                 <div>
                   <h3 className="font-semibold">{contact.name}</h3>
                   <p className="text-sm text-gray-600">{contact.email}</p>
@@ -218,13 +256,13 @@ const handleDelete = async (id: number) => {
                   >
                     Edit
                   </button>
-                <button
-  onClick={() => handleDelete(contact.id)}
-  className={`bg-red-500 text-white px-4 py-2 rounded ${isDeleting ? "opacity-50 cursor-not-allowed" : ""}`}
-  disabled={isDeleting} // Nonaktifkan tombol saat proses penghapusan berjalan
->
-  {isDeleting ? "Deleting..." : "Delete"} {/* Indikator loading */}
-</button>
+                  <button
+                    onClick={() => handleOpenModal(contact.id)}
+                    className={`bg-red-500 text-white px-4 py-2 rounded ${isDeleting ? "opacity-50 cursor-not-allowed" : ""}`}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </div>
             ))
@@ -233,6 +271,31 @@ const handleDelete = async (id: number) => {
           )}
         </div>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-6 rounded shadow-lg w-96">
+            <h3 className="text-lg font-semibold mb-4">
+              Are you sure you want to delete this contact?
+            </h3>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={handleCloseModal}
+                className="bg-gray-400 text-white px-4 py-2 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(contactToDelete!)}
+                className="bg-red-500 text-white px-4 py-2 rounded"
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Edit */}
       {editingContact && (
@@ -249,7 +312,10 @@ const handleDelete = async (id: number) => {
                   id="name"
                   value={editingContact.name}
                   onChange={(e) =>
-                    setEditingContact({ ...editingContact, name: e.target.value })
+                    setEditingContact({
+                      ...editingContact,
+                      name: e.target.value,
+                    })
                   }
                   className="w-full p-2 mt-1 border rounded"
                 />
@@ -263,7 +329,10 @@ const handleDelete = async (id: number) => {
                   id="email"
                   value={editingContact.email}
                   onChange={(e) =>
-                    setEditingContact({ ...editingContact, email: e.target.value })
+                    setEditingContact({
+                      ...editingContact,
+                      email: e.target.value,
+                    })
                   }
                   className="w-full p-2 mt-1 border rounded"
                 />
@@ -276,7 +345,10 @@ const handleDelete = async (id: number) => {
                   id="message"
                   value={editingContact.message}
                   onChange={(e) =>
-                    setEditingContact({ ...editingContact, message: e.target.value })
+                    setEditingContact({
+                      ...editingContact,
+                      message: e.target.value,
+                    })
                   }
                   className="w-full p-2 mt-1 border rounded"
                 />
@@ -301,7 +373,6 @@ const handleDelete = async (id: number) => {
           </div>
         </div>
       )}
-
     </div>
   );
 }
